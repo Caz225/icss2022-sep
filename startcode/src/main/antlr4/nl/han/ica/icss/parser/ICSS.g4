@@ -25,6 +25,8 @@ ID_IDENT: '#' [a-z0-9\-]+;
 CLASS_IDENT: '.' [a-z0-9\-]+;
 
 //General identifiers
+VARIABLE_IDENT: [A-Z][a-zA-Z0-9]*;
+
 LOWER_IDENT: [a-z] [a-z0-9\-]*;
 CAPITAL_IDENT: [A-Z] [A-Za-z0-9_]*;
 
@@ -44,9 +46,21 @@ ASSIGNMENT_OPERATOR: ':=';
 
 
 
+
+
+
 //--- PARSER: ---
 stylesheet
-    : ruleset* EOF
+    : (variableAssignment | ruleset)* EOF
+    ;
+
+statement
+    : variableAssignment
+    | ruleset
+    ;
+
+variableAssignment
+    : VARIABLE_IDENT ASSIGNMENT_OPERATOR expression SEMICOLON
     ;
 
 ruleset
@@ -71,14 +85,18 @@ propertyName
     ;
 
 expression
-    : COLOR
+    : expression PLUS expression
+    | expression MIN expression
+    | expression MUL expression
     | PIXELSIZE
     | PERCENTAGE
     | SCALAR
     | TRUE
     | FALSE
+    | COLOR
+    | VARIABLE_IDENT
+    | LOWER_IDENT
     | ID_IDENT
     | CLASS_IDENT
-    | LOWER_IDENT
+    | '(' expression ')'
     ;
-
