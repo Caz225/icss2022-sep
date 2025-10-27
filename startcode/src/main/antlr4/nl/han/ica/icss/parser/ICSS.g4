@@ -63,7 +63,8 @@ stylesheet
 // Een statement kan een variable assignment of ruleset zijn
 statement
     : variableAssignment
-    | ruleset
+    | declaration
+    | ifStatement
     ;
 
 //--- Variable Assignment ---
@@ -73,7 +74,7 @@ variableAssignment
 
 //--- Rulesets en selectors ---
 ruleset
-    : selector OPEN_BRACE declaration* CLOSE_BRACE
+    : selector OPEN_BRACE statement* CLOSE_BRACE
     ;
 
 selector
@@ -119,4 +120,9 @@ primaryExpr
     | TRUE
     | FALSE
     | '(' additionExpr ')'   // Haakjes om expressies te groeperen
+    ;
+
+//if-statement
+ifStatement
+    : IF BOX_BRACKET_OPEN expression BOX_BRACKET_CLOSE OPEN_BRACE statement* CLOSE_BRACE (ELSE OPEN_BRACE statement* CLOSE_BRACE)?
     ;
