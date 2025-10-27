@@ -181,46 +181,61 @@ public class ASTListener extends ICSSBaseListener {
 
 	@Override
 	public void enterIfStatement(ICSSParser.IfStatementContext ctx) {
-		// Parse condition
 		Expression condition = parseAdditionExpr(ctx.expression().additionExpr());
-
-		// IfClause maken
 		IfClause ifNode = new IfClause();
 		ifNode.addChild(condition);
-
-		// Voeg toe aan huidige container
 		currentContainer.peek().addChild(ifNode);
-
-		// Push IfClause op stack voor if-block
 		currentContainer.push(ifNode);
 	}
 
 	@Override
 	public void exitIfStatement(ICSSParser.IfStatementContext ctx) {
-		// Pop IfClause
-		currentContainer.pop();
+		// Pop tot en met de IfClause
+		while (!(currentContainer.peek() instanceof IfClause)) {
+			currentContainer.pop();
+		}
+		currentContainer.pop(); // Pop de IfClause zelf
 	}
+
+
+
+
 
 	// ELSE-block wordt pas gepushed als we statements binnen else tegenkomen
 	@Override
 	public void enterStatement(ICSSParser.StatementContext ctx) {
+		// Controleer of dit statement deel uitmaakt van een IF-statement
 		if (ctx.getParent() instanceof ICSSParser.IfStatementContext) {
 			ICSSParser.IfStatementContext ifCtx = (ICSSParser.IfStatementContext) ctx.getParent();
-			// Alleen pushen als dit statement in het else-block staat
-			if (ifCtx.ELSE() != null && currentContainer.peek() instanceof IfClause) {
-				ElseClause elseNode = new ElseClause();
-				((IfClause) currentContainer.peek()).addChild(elseNode);
-				currentContainer.push(elseNode);
+
+			// Als er een ELSE aanwezig is, bepaal dan of deze statement ná de ELSE staat
+			if (ifCtx.ELSE() != null) {
+				int stmtTokenIndex = ctx.getStart().getTokenIndex();
+				int elseTokenIndex = ifCtx.ELSE().getSymbol().getTokenIndex();
+
+				// Alleen pushen als we daadwerkelijk in het ELSE-gedeelte binnenkomen
+				if (stmtTokenIndex > elseTokenIndex && currentContainer.peek() instanceof IfClause) {
+					ElseClause elseNode = new ElseClause();
+					// voeg ElseClause toe als child van de IfClause
+					((IfClause) currentContainer.peek()).addChild(elseNode);
+					// push de ElseClause zodat volgende statements erin terechtkomen
+					currentContainer.push(elseNode);
+				}
 			}
 		}
+		// anders: geen aanpassing (andere statements worden normaal toegevoegd door uw listener)
 	}
+
+
 
 	@Override
 	public void exitStatement(ICSSParser.StatementContext ctx) {
+		// Pop ElseClause aan het einde van het else-block
 		if (currentContainer.peek() instanceof ElseClause) {
 			currentContainer.pop();
 		}
 	}
+
 
 
 }
