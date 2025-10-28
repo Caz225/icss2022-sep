@@ -8,6 +8,17 @@ import java.util.List;
 public class ASTNode {
 
     private SemanticError error = null;
+    protected ASTNode parent = null;
+
+    public ASTNode getParent() {
+        return parent;
+    }
+
+    public void setParent(ASTNode parent) {
+        this.parent = parent;
+    }
+
+
 
     /*
      This method is used in the GUI to create an appropriate label
@@ -29,12 +40,14 @@ public class ASTNode {
       incrementally.
     */
     public ASTNode addChild(ASTNode child) {
-            return this;
+        child.setParent(this);
+        return this;
     }
     /*
     * By implementing this method you can easily make transformations that prune the AST.
     */
     public ASTNode removeChild(ASTNode child) {
+        child.setParent(null);
         return this;
     }
 
