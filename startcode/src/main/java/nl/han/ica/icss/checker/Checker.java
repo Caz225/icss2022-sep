@@ -27,12 +27,20 @@ public class Checker {
     }
 
     private void checkNode(ASTNode node) {
+        // === 1. Nieuwe scope starten (stylerule of if/else) ===
+        if (node instanceof Stylerule || node instanceof IfClause || node instanceof ElseClause) {
+            variableTypes.addFirst(new HashMap<>());
+        }
+
+        // === 2. Variabele declaratie ===
         if (node instanceof VariableAssignment) {
             VariableAssignment varAssign = (VariableAssignment) node;
             ExpressionType type = determineType(varAssign.expression);
             variableTypes.getFirst().put(varAssign.name.name, type);
+        }
 
-        } else if (node instanceof Declaration) {
+        // === 3. Declaraties controleren ===
+        else if (node instanceof Declaration) {
             Declaration decl = (Declaration) node;
             ExpressionType valueType = determineType(decl.expression);
             String property = decl.property.name;
@@ -48,21 +56,59 @@ public class Checker {
                     node.setError("Property " + property + " verwacht een numerieke waarde (px of %).");
                 }
             }
-        } else if (node instanceof Stylerule) {
-            // Nieuwe scope binnen een selector
-            variableTypes.addFirst(new HashMap<>());
         }
 
-        // Recursief kinderen checken
+        // === 4. Expressions in if/operation controleren ===
+        if (node instanceof IfClause) {
+            IfClause ifNode = (IfClause) node;
+            determineType(ifNode.conditionalExpression);
+        }
+
+        // === Controle op operaties ===
+        if (node instanceof Operation) {
+            Operation opNode = (Operation) node;
+
+            // Bepaal de types van de linker- en rechterkant
+            ExpressionType leftType = determineType(opNode.lhs);
+            ExpressionType rightType = determineType(opNode.rhs);
+
+            // Controleer of een van beide kleuren bevat
+            if (leftType == ExpressionType.COLOR || rightType == ExpressionType.COLOR) {
+                node.setError("Kleuren mogen niet gebruikt worden in operaties (+, -, *).");
+            }
+
+            // Controleer of beide zijden numeriek zijn
+            if (!(leftType == ExpressionType.PIXEL || leftType == ExpressionType.PERCENTAGE || leftType == ExpressionType.SCALAR) ||
+                    !(rightType == ExpressionType.PIXEL || rightType == ExpressionType.PERCENTAGE || rightType == ExpressionType.SCALAR)) {
+                node.setError("Operaties mogen alleen uitgevoerd worden op numerieke waarden (px, %, scalar).");
+            }
+        }
+
+
+        // === 5. Kinderen recursief controleren ===
         for (ASTNode child : node.getChildren()) {
             checkNode(child);
         }
 
-        if (node instanceof Stylerule) {
-            // Scope verlaten
+        // === 6. Controleer of de conditie bij "if" een boolean is ===
+        if (node instanceof IfClause) {
+            IfClause ifNode = (IfClause) node;
+
+            ExpressionType conditionType = determineType(ifNode.conditionalExpression);
+
+            if (conditionType != ExpressionType.BOOL) {
+                ifNode.setError("De conditie van een if-statement moet een boolean zijn.");
+            }
+        }
+
+        // === 7. Scope verlaten ===
+        if (node instanceof Stylerule || node instanceof IfClause || node instanceof ElseClause) {
             variableTypes.removeFirst();
         }
+
+
     }
+
 
     private ExpressionType determineType(Expression expression) {
         if (expression instanceof ColorLiteral) return ExpressionType.COLOR;
@@ -81,6 +127,34 @@ public class Checker {
             expression.setError("Variabele " + ref.name + " is niet gedefinieerd.");
             return ExpressionType.UNDEFINED;
         }
+
+        if (expression instanceof Operation) {
+            Operation op = (Operation) expression;
+            ExpressionType leftType = determineType(op.lhs);
+            ExpressionType rightType = determineType(op.rhs);
+
+            // Kleuren mogen niet in operaties
+            if (leftType == ExpressionType.COLOR || rightType == ExpressionType.COLOR) {
+                expression.setError("Kleuren mogen niet gebruikt worden in operaties (+, -, *).");
+                return ExpressionType.UNDEFINED;
+            }
+
+            // Als beide numeriek zijn, is de operatie numeriek
+            if ((leftType == ExpressionType.PIXEL || leftType == ExpressionType.PERCENTAGE || leftType == ExpressionType.SCALAR) &&
+                    (rightType == ExpressionType.PIXEL || rightType == ExpressionType.PERCENTAGE || rightType == ExpressionType.SCALAR)) {
+
+                // Pixel + Pixel = Pixel, Percentage + Percentage = Percentage, Pixel + Percentage? Kies PIXEL als default
+                if (leftType == ExpressionType.PIXEL && rightType == ExpressionType.PIXEL) return ExpressionType.PIXEL;
+                if (leftType == ExpressionType.PERCENTAGE && rightType == ExpressionType.PERCENTAGE) return ExpressionType.PERCENTAGE;
+
+                return ExpressionType.SCALAR; // mengvorm voor gemengde types
+            }
+
+            // anders ongeldig
+            expression.setError("Operaties mogen alleen op numerieke waarden (px, %, scalar).");
+            return ExpressionType.UNDEFINED;
+        }
+
 
         return ExpressionType.UNDEFINED;
     }
