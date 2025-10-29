@@ -183,7 +183,7 @@ public class ASTListener extends ICSSBaseListener {
 	public void enterIfStatement(ICSSParser.IfStatementContext ctx) {
 		Expression condition = parseAdditionExpr(ctx.expression().additionExpr());
 		IfClause ifNode = new IfClause();
-		ifNode.addChild(condition);
+		ifNode.conditionalExpression = condition;
 		currentContainer.peek().addChild(ifNode);
 		currentContainer.push(ifNode);
 	}
@@ -216,9 +216,9 @@ public class ASTListener extends ICSSBaseListener {
 				// Alleen pushen als we daadwerkelijk in het ELSE-gedeelte binnenkomen
 				if (stmtTokenIndex > elseTokenIndex && currentContainer.peek() instanceof IfClause) {
 					ElseClause elseNode = new ElseClause();
-					// voeg ElseClause toe als child van de IfClause
-					((IfClause) currentContainer.peek()).addChild(elseNode);
-					// push de ElseClause zodat volgende statements erin terechtkomen
+					IfClause ifNode = (IfClause) currentContainer.peek();
+					ifNode.elseClause = elseNode;
+					ifNode.addChild(elseNode);
 					currentContainer.push(elseNode);
 				}
 			}

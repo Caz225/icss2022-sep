@@ -15,8 +15,9 @@ public class Stylesheet extends ASTNode {
 	public ArrayList<ASTNode> body;
 	
 	public Stylesheet() {
-		this.body = new ArrayList<>();
+		this.children = new ArrayList<>();
 	}
+
 	public Stylesheet(ArrayList<ASTNode> body) {
 		this.body = body;
 	}

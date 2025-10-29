@@ -2,6 +2,8 @@ package nl.han.ica.icss;
 
 import nl.han.ica.icss.ast.AST;
 import nl.han.ica.icss.ast.ASTNode;
+import nl.han.ica.icss.ast.Declaration;
+import nl.han.ica.icss.ast.VariableAssignment;
 import nl.han.ica.icss.checker.Checker;
 import nl.han.ica.icss.checker.SemanticError;
 import nl.han.ica.icss.generator.Generator;
@@ -120,14 +122,19 @@ public class Pipeline implements ANTLRErrorListener {
         transformed = errors.isEmpty();
     }
 
-    public void printAST(ASTNode node, int indent) {
-        String indentation = " ".repeat(indent);  // inspringing voor hiërarchie
-        System.out.println(indentation + node.getNodeLabel());
+    private void printAST(ASTNode node, int level) {
+        for (int i = 0; i < level; i++) System.out.print("  ");
+        System.out.println(node.getClass().getSimpleName()
+                + (node instanceof VariableAssignment ? " (" + ((VariableAssignment) node).name.name + ")" : "")
+                + (node instanceof Declaration ? " (" + ((Declaration) node).property.name + ")" : "")
+        );
 
-        for (ASTNode child : node.getChildren()) {
-            printAST(child, indent + 2); // 2 spaties per niveau
+        List<ASTNode> childrenCopy = new ArrayList<>(node.getChildren()); // gebruik actuele lijst
+        for (ASTNode child : childrenCopy) {
+            printAST(child, level + 1);
         }
     }
+
 
 
     public String generate() {
