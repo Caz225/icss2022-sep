@@ -3,17 +3,11 @@ package nl.han.ica.icss.transforms;
 import nl.han.ica.datastructures.HANLinkedList;
 import nl.han.ica.datastructures.IHANLinkedList;
 import nl.han.ica.icss.ast.*;
-import nl.han.ica.icss.ast.literals.BoolLiteral;
-import nl.han.ica.icss.ast.literals.PercentageLiteral;
-import nl.han.ica.icss.ast.literals.PixelLiteral;
-import nl.han.ica.icss.ast.literals.ScalarLiteral;
-import nl.han.ica.icss.ast.operations.AddOperation;
-import nl.han.ica.icss.ast.operations.MultiplyOperation;
-import nl.han.ica.icss.ast.operations.SubtractOperation;
+import nl.han.ica.icss.ast.literals.*;
+import nl.han.ica.icss.ast.operations.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 
 public class Evaluator implements Transform {
@@ -26,162 +20,187 @@ public class Evaluator implements Transform {
 
     @Override
     public void apply(AST ast) {
-        variableValues.addFirst(new HashMap<>()); // globale scope
-        evaluateNode(ast.root);
-        variableValues.removeFirst();
+        variableValues = new HANLinkedList<>();
+        openNewScope();
+        evaluateNode(ast.root, null);
+        closeCurrentScope();
     }
 
-    private void evaluateNode(ASTNode node) {
-        if (node instanceof VariableAssignment) {
-            VariableAssignment va = (VariableAssignment) node;
-            Literal value = evaluateExpression(va.expression);
-            va.expression = value;
-            assignVariable(va.name.name, value);
-
-        } else if (node instanceof Declaration) {
-            Declaration decl = (Declaration) node;
-            decl.expression = evaluateExpression(decl.expression);
-
-        } else if (node instanceof Stylerule) {
-            variableValues.addFirst(new HashMap<>()); // lokale scope voor rule
-            for (ASTNode child : node.getChildren()) {
-                evaluateNode(child);
-            }
-            variableValues.removeFirst();
-
-        } else if (node instanceof IfClause) {
-            IfClause ifNode = (IfClause) node;
-            Literal condLit = evaluateExpression(ifNode.conditionalExpression);
-            if (!(condLit instanceof BoolLiteral)) {
-                throw new RuntimeException("If-conditie moet boolean zijn!");
-            }
-            boolean condition = ((BoolLiteral) condLit).value;
-
-            variableValues.addFirst(new HashMap<>()); // scope voor if-block
-            List<ASTNode> bodyToEval = condition ? ifNode.body : (ifNode.elseClause != null ? ifNode.elseClause.body : new ArrayList<>());
-            for (ASTNode stmt : bodyToEval) evaluateNode(stmt);
-            variableValues.removeFirst();
-        }
-
-        // Recursief over children
-        for (ASTNode child : node.getChildren()) evaluateNode(child);
+    // -------------------------
+    // Scope helpers
+    // -------------------------
+    private void openNewScope() {
+        variableValues.addFirst(new HashMap<>());
     }
 
-    private Literal evaluateExpression(Expression expr) {
-        if (expr instanceof Literal) {
-            return (Literal) expr; // literal blijft hetzelfde
-
-        } else if (expr instanceof VariableReference) {
-            String varName = ((VariableReference) expr).name;
-
-            // Zoek van bovenste scope naar onderste (last index -> 0) of omgekeerd
-            for (int i = variableValues.getSize() - 1; i >= 0; i--) {
-                HashMap<String, Literal> scope = variableValues.get(i);
-                if (scope.containsKey(varName)) {
-                    return scope.get(varName);
-                }
-            }
-            System.out.println("NOT FOUND " + varName + " -> fallback Scalar(0)");
-            return new ScalarLiteral(0);
-        } else if (expr instanceof AddOperation) {
-            AddOperation add = (AddOperation) expr;
-            Literal lhs = evaluateExpression(add.lhs);
-            Literal rhs = evaluateExpression(add.rhs);
-            return computeOperation(lhs, rhs, "+");
-
-        } else if (expr instanceof SubtractOperation) {
-            SubtractOperation sub = (SubtractOperation) expr;
-            Literal lhs = evaluateExpression(sub.lhs);
-            Literal rhs = evaluateExpression(sub.rhs);
-            return computeOperation(lhs, rhs, "-");
-
-        } else if (expr instanceof MultiplyOperation) {
-            MultiplyOperation mul = (MultiplyOperation) expr;
-            Literal lhs = evaluateExpression(mul.lhs);
-            Literal rhs = evaluateExpression(mul.rhs);
-            return computeOperation(lhs, rhs, "*");
-        }
-
-        return null; // onbekend type
+    private void closeCurrentScope() {
+        if (variableValues.getSize() > 0) variableValues.removeFirst();
     }
 
-    private Literal computeOperation(Literal lhs, Literal rhs, String op) {
-        // PixelLiteral + PixelLiteral of - PixelLiteral
-        if (lhs instanceof PixelLiteral && rhs instanceof PixelLiteral) {
-            int result = 0;
-            if (op.equals("+")) {
-                result = ((PixelLiteral) lhs).value + ((PixelLiteral) rhs).value;
-            } else if (op.equals("-")) {
-                result = ((PixelLiteral) lhs).value - ((PixelLiteral) rhs).value;
-            } else {
-                throw new RuntimeException("Ongeldige operatie voor PixelLiteral: " + op);
-            }
-            return new PixelLiteral(result);
-        }
-
-        // PercentageLiteral * ScalarLiteral
-        if (lhs instanceof PercentageLiteral && rhs instanceof ScalarLiteral) {
-            int result = 0;
-            if (op.equals("*")) {
-                result = (int)(((PercentageLiteral) lhs).value * ((ScalarLiteral) rhs).value);
-            } else {
-                throw new RuntimeException("Ongeldige operatie voor PercentageLiteral: " + op);
-            }
-            return new PercentageLiteral(result);
-        }
-
-        // ScalarLiteral met +, -, *
-        if (lhs instanceof ScalarLiteral && rhs instanceof ScalarLiteral) {
-            int result = 0;
-            switch (op) {
-                case "+": result = ((ScalarLiteral) lhs).value + ((ScalarLiteral) rhs).value; break;
-                case "-": result = ((ScalarLiteral) lhs).value - ((ScalarLiteral) rhs).value; break;
-                case "*": result = ((ScalarLiteral) lhs).value * ((ScalarLiteral) rhs).value; break;
-                default: throw new RuntimeException("Ongeldige operatie voor ScalarLiteral: " + op);
-            }
-            return new ScalarLiteral(result);
-        }
-
-        // PixelLiteral * ScalarLiteral
-        if (lhs instanceof PixelLiteral && rhs instanceof ScalarLiteral && op.equals("*")) {
-            int result = (int)(((PixelLiteral) lhs).value * ((ScalarLiteral) rhs).value);
-            return new PixelLiteral(result);
-        }
-
-        // ScalarLiteral * PixelLiteral
-        if (lhs instanceof ScalarLiteral && rhs instanceof PixelLiteral && op.equals("*")) {
-            int result = (int)(((ScalarLiteral) lhs).value * ((PixelLiteral) rhs).value);
-            return new PixelLiteral(result);
-        }
-
-        throw new RuntimeException("Onbekende of ongeldig combinatie van types bij operatie: "
-                + lhs.getClass().getSimpleName() + " " + op + " " + rhs.getClass().getSimpleName());
-    }
-
-
-
-    // Helpermethode
-    private void assignVariable(String name, Literal value) {
-        // Zoek de scope waar de variabele al bestaat
-        for (int i = 0; i < variableValues.getSize(); i++) {
-            HashMap<String, Literal> scope = variableValues.get(i);
-            if (scope.containsKey(name)) {
-                scope.put(name, value);
-                return;
-            }
-        }
-        // Anders in de bovenste scope zetten
+    private void defineVariable(String name, Literal value) {
         variableValues.getFirst().put(name, value);
     }
 
-    // Helpermethode
-    private Literal getVariable(String name) {
-        for (int i = variableValues.getSize() - 1; i >= 0; i--) {
+    private Literal findVariable(String name) {
+        try {
+            HashMap<String, Literal> top = variableValues.getFirst();
+            if (top != null && top.containsKey(name)) return top.get(name);
+        } catch (Exception ignored) { }
+
+        int n = variableValues.getSize();
+        for (int i = n - 1; i >= 0; i--) {
             HashMap<String, Literal> scope = variableValues.get(i);
-            if (scope.containsKey(name)) return scope.get(name);
+            if (scope != null && scope.containsKey(name)) return scope.get(name);
         }
-        return new ScalarLiteral(0); // fallback
+        return null;
     }
 
+    // -------------------------
+    // Tree traversal
+    // -------------------------
+    private void evaluateNode(ASTNode node, ASTNode parent) {
+        String indent = parent == null ? "" : "  ";
+        System.out.println(indent + "Evaluating node: " + node.getClass().getSimpleName()
+                + (node instanceof VariableAssignment ? " (" + ((VariableAssignment) node).name.name + ")" : "")
+                + (node instanceof Declaration ? " (" + ((Declaration) node).property.name + ")" : "")
+                + (node instanceof IfClause ? " (IfClause)" : ""));
 
+        List<ASTNode> editableList = getModifiableBody(node);
+        if (editableList != null) {
+            for (int index = 0; index < editableList.size(); index++) {
+                ASTNode currentNode = editableList.get(index);
+
+                if (currentNode instanceof Stylerule) {
+                    openNewScope();
+                    evaluateNode(currentNode, node);
+                    closeCurrentScope();
+                    continue;
+                }
+
+                if (currentNode instanceof IfClause) {
+                    IfClause ifNode = (IfClause) currentNode;
+                    Literal condition = evaluateExpression(ifNode.conditionalExpression);
+                    boolean isTrue = (condition instanceof BoolLiteral) && ((BoolLiteral) condition).value;
+
+                    List<ASTNode> chosenBody = isTrue
+                            ? new ArrayList<>(ifNode.body)
+                            : (ifNode.elseClause != null ? new ArrayList<>(ifNode.elseClause.body) : new ArrayList<>());
+
+                    editableList.remove(index);
+
+                    if (!chosenBody.isEmpty()) {
+                        editableList.addAll(index, chosenBody);
+                        index = index - 1;
+                    } else {
+                        index = index - 1;
+                    }
+                    continue;
+                }
+
+                if (currentNode instanceof ElseClause) {
+                    evaluateNode(currentNode, node);
+                    continue;
+                }
+
+                if (currentNode instanceof VariableAssignment) {
+                    VariableAssignment va = (VariableAssignment) currentNode;
+                    Literal value = evaluateExpression(va.expression);
+                    va.expression = value;
+                    defineVariable(va.name.name, value);
+                    evaluateNode(currentNode, node);
+                    continue;
+                }
+
+                if (currentNode instanceof Declaration) {
+                    Declaration decl = (Declaration) currentNode;
+                    if (decl.expression != null) decl.expression = evaluateExpression(decl.expression);
+                    evaluateNode(currentNode, node);
+                    continue;
+                }
+
+                evaluateNode(currentNode, node);
+            }
+            return;
+        }
+
+        for (ASTNode child : node.getChildren()) {
+            evaluateNode(child, node);
+        }
+    }
+
+    private List<ASTNode> getModifiableBody(ASTNode node) {
+        if (node instanceof Stylesheet) return ((Stylesheet) node).body;
+        if (node instanceof Stylerule) return ((Stylerule) node).body;
+        if (node instanceof IfClause) return ((IfClause) node).body;
+        if (node instanceof ElseClause) return ((ElseClause) node).body;
+        return null;
+    }
+
+    // -------------------------
+    // Expression evaluation
+    // -------------------------
+    private Literal evaluateExpression(Expression expression) {
+        if (expression == null) return new ScalarLiteral(0);
+
+        if (expression instanceof PixelLiteral) return (PixelLiteral) expression;
+        if (expression instanceof PercentageLiteral) return (PercentageLiteral) expression;
+        if (expression instanceof ScalarLiteral) return (ScalarLiteral) expression;
+        if (expression instanceof ColorLiteral) return (ColorLiteral) expression;
+        if (expression instanceof BoolLiteral) return (BoolLiteral) expression;
+
+        if (expression instanceof VariableReference) {
+            String name = ((VariableReference) expression).name;
+            Literal found = findVariable(name);
+            return (found != null) ? found : new ScalarLiteral(0);
+        }
+
+        if (expression instanceof AddOperation || expression instanceof SubtractOperation) {
+            Operation operation = (Operation) expression;
+            Literal left = evaluateExpression(operation.lhs);
+            Literal right = evaluateExpression(operation.rhs);
+            boolean isPlus = expression instanceof AddOperation;
+            return computeOperation(left, right, isPlus ? "+" : "-");
+        }
+
+        if (expression instanceof MultiplyOperation) {
+            Operation operation = (Operation) expression;
+            Literal left = evaluateExpression(operation.lhs);
+            Literal right = evaluateExpression(operation.rhs);
+            return computeOperation(left, right, "*");
+        }
+
+        return new ScalarLiteral(0);
+    }
+
+    private Literal computeOperation(Literal lhs, Literal rhs, String op) {
+        if (lhs instanceof PixelLiteral && rhs instanceof PixelLiteral) {
+            int a = ((PixelLiteral) lhs).value;
+            int b = ((PixelLiteral) rhs).value;
+            return new PixelLiteral(op.equals("+") ? a + b : a - b);
+        }
+        if (lhs instanceof PercentageLiteral && rhs instanceof PercentageLiteral) {
+            int a = ((PercentageLiteral) lhs).value;
+            int b = ((PercentageLiteral) rhs).value;
+            return new PercentageLiteral(op.equals("+") ? a + b : a - b);
+        }
+        if (lhs instanceof ScalarLiteral && rhs instanceof ScalarLiteral) {
+            int a = ((ScalarLiteral) lhs).value;
+            int b = ((ScalarLiteral) rhs).value;
+            switch (op) {
+                case "+": return new ScalarLiteral(a + b);
+                case "-": return new ScalarLiteral(a - b);
+                case "*": return new ScalarLiteral(a * b);
+            }
+        }
+        if (lhs instanceof PixelLiteral && rhs instanceof ScalarLiteral && op.equals("*"))
+            return new PixelLiteral(((PixelLiteral) lhs).value * ((ScalarLiteral) rhs).value);
+        if (lhs instanceof ScalarLiteral && rhs instanceof PixelLiteral && op.equals("*"))
+            return new PixelLiteral(((ScalarLiteral) lhs).value * ((PixelLiteral) rhs).value);
+        if (lhs instanceof PercentageLiteral && rhs instanceof ScalarLiteral && op.equals("*"))
+            return new PercentageLiteral(((PercentageLiteral) lhs).value * ((ScalarLiteral) rhs).value);
+        if (lhs instanceof ScalarLiteral && rhs instanceof PercentageLiteral && op.equals("*"))
+            return new PercentageLiteral(((ScalarLiteral) lhs).value * ((PercentageLiteral) rhs).value);
+
+        return new ScalarLiteral(0);
+    }
 }
