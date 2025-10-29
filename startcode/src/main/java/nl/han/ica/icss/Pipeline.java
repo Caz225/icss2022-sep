@@ -115,6 +115,8 @@ public class Pipeline implements ANTLRErrorListener {
         // Apply transformations
         (new Evaluator()).apply(ast);
 
+        System.out.println("=== After evaluation ===");
+
         // === AST inspectie / debug ===
         for (ASTNode child : ast.root.getChildren()) {
             if (child instanceof Stylerule) {
@@ -136,6 +138,7 @@ public class Pipeline implements ANTLRErrorListener {
         printAST(ast.root, 0);
     }
 
+
     public void printAST(ASTNode node, int indent) {
         String indentation = " ".repeat(indent);
         System.out.println(indentation + node.getNodeLabel());
@@ -143,6 +146,7 @@ public class Pipeline implements ANTLRErrorListener {
         for (ASTNode child : node.getChildren()) {
             printAST(child, indent + 2); // 2 spaties per niveau
         }
+
     }
 
 

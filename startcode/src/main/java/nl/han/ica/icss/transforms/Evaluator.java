@@ -14,6 +14,7 @@ import nl.han.ica.icss.ast.operations.SubtractOperation;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 
 public class Evaluator implements Transform {
 
@@ -44,6 +45,9 @@ public class Evaluator implements Transform {
     }
 
     private void evaluateNode(ASTNode node) {
+        // Debugregel:
+        System.out.println("Evaluating: " + node.getClass().getSimpleName());
+
         if (node instanceof VariableAssignment) {
             VariableAssignment varAssign = (VariableAssignment) node;
             Literal evaluated = evaluateExpression(varAssign.expression);
@@ -56,15 +60,19 @@ public class Evaluator implements Transform {
 
         } else if (node instanceof Stylerule) {
             variableValues.addFirst(new HashMap<>());
-            // Maak een copy van de children lijst om te kunnen wijzigen tijdens iteratie
-            LinkedList<ASTNode> childrenCopy = new LinkedList<>(node.getChildren());
-            for (ASTNode child : childrenCopy) {
+
+            // Gebruik de echte lijst, niet een kopie!
+            // Zo wordt een vervanging (zoals IfClause) meteen zichtbaar
+            for (int i = 0; i < node.getChildren().size(); i++) {
+                ASTNode child = node.getChildren().get(i);
                 evaluateNode(child);
             }
-            variableValues.removeFirst();
 
+            variableValues.removeFirst();
         } else if (node instanceof IfClause) {
+            System.out.println("Evaluating IfClause");
             IfClause ifNode = (IfClause) node;
+            ASTNode parent = node.getParent();
             Literal condLiteral = evaluateExpression(ifNode.conditionalExpression);
             if (!(condLiteral instanceof BoolLiteral)) {
                 throw new RuntimeException("Conditie van if-statement moet een boolean zijn, maar kreeg: "
@@ -72,46 +80,61 @@ public class Evaluator implements Transform {
             }
             boolean condition = ((BoolLiteral) condLiteral).value;
 
-            // Bereid de lijst die IfClause gaat vervangen
-            ArrayList<ASTNode> replacement = new ArrayList<>();
-            variableValues.addFirst(new HashMap<>());
+            // Vlak vóór het vervangen
+            if (parent != null) {
+                System.out.println("Parent before replace: " + parent.getChildren().size());
+                System.out.println("Replacing IfClause in " + parent.getClass().getSimpleName());
+            }
+
+            // Nieuwe lijst die IfClause gaat vervangen
+            List<ASTNode> replacement = new ArrayList<>();
+
             if (condition) {
                 for (ASTNode stmt : ifNode.body) {
-                    evaluateNode(stmt);
+                    // Evaluatie van een VariableAssignment moet de expression aanpassen
+                    if (stmt instanceof VariableAssignment) {
+                        VariableAssignment va = (VariableAssignment) stmt;
+                        va.expression = evaluateExpression(va.expression); // hier vervangen
+                        assignVariable(va.name.name, va.expression);
+                    }
                     replacement.add(stmt);
                 }
             } else if (ifNode.elseClause != null) {
-                variableValues.addFirst(new HashMap<>());
                 for (ASTNode stmt : ifNode.elseClause.body) {
-                    evaluateNode(stmt);
+                    if (stmt instanceof VariableAssignment) {
+                        VariableAssignment va = (VariableAssignment) stmt;
+                        va.expression = evaluateExpression(va.expression);
+                        assignVariable(va.name.name, va.expression);
+                    }
                     replacement.add(stmt);
                 }
-                variableValues.removeFirst();
             }
-            variableValues.removeFirst();
 
-            // Vervang IfClause in parent door body of else
-            ASTNode parent = node.getParent();
+
+            // === Belangrijk: vervang node in de parent correct ===
             if (parent != null) {
-                ArrayList<ASTNode> siblings = parent.getChildren();
-                int index = siblings.indexOf(node);
-                siblings.remove(index);
-                siblings.addAll(index, replacement);
-                for (ASTNode n : replacement) {
-                    n.setParent(parent);
+                List<ASTNode> siblings = parent.getChildren();
+                int idx = siblings.indexOf(node);
+                if (idx != -1) {
+                    siblings.remove(idx);
+                    siblings.addAll(idx, replacement);
+                    for (ASTNode n : replacement) {
+                        n.setParent(parent);
+                    }
+
+                    // Debug
+                    System.out.println("Parent after replace: " + parent.getChildren().size());
+                    for (ASTNode c : parent.getChildren()) {
+                        System.out.println("  -> " + c.getNodeLabel());
+                    }
                 }
             }
 
-
+            // Stop verdere verwerking van deze IfClause
+            return;
         } else if (node instanceof ElseClause) {
             // ElseClause wordt al in IfClause verwerkt
             return;
-        }
-
-        // Recursief over alle children
-        LinkedList<ASTNode> childrenCopy = new LinkedList<>(node.getChildren());
-        for (ASTNode child : childrenCopy) {
-            evaluateNode(child);
         }
     }
 
