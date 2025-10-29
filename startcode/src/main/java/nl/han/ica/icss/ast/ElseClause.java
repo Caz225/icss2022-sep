@@ -7,9 +7,7 @@ public class ElseClause extends ASTNode{
 
     public ArrayList<ASTNode> body = new ArrayList<>();
 
-    public ElseClause() {
-        this.body = new ArrayList<>();
-    }
+    public ElseClause() { }
 
     public ElseClause(ArrayList<ASTNode> body) {
 
