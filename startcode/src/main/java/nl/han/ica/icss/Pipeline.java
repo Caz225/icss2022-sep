@@ -2,8 +2,6 @@ package nl.han.ica.icss;
 
 import nl.han.ica.icss.ast.AST;
 import nl.han.ica.icss.ast.ASTNode;
-import nl.han.ica.icss.ast.Declaration;
-import nl.han.ica.icss.ast.Stylerule;
 import nl.han.ica.icss.checker.Checker;
 import nl.han.ica.icss.checker.SemanticError;
 import nl.han.ica.icss.generator.Generator;
@@ -109,44 +107,26 @@ public class Pipeline implements ANTLRErrorListener {
     }
 
     public void transform() {
-        if (ast == null)
+        if(ast == null)
             return;
 
-        // Apply transformations
         (new Evaluator()).apply(ast);
 
-        System.out.println("=== After evaluation ===");
-
-        // === AST inspectie / debug ===
-        for (ASTNode child : ast.root.getChildren()) {
-            if (child instanceof Stylerule) {
-                Stylerule sr = (Stylerule) child;
-                for (ASTNode decl : sr.getChildren()) {
-                    if (decl instanceof Declaration) {
-                        System.out.println(
-                                ((Declaration) decl).property.name + " -> " +
-                                        ((Declaration) decl).expression.getNodeLabel()
-                        );
-                    }
-                }
-            }
-        }
-        // ===============================
+        // Debug: print hele AST
+        System.out.println("=== AST Debug ===");
+        printAST(ast.root, 0);
+        System.out.println("=== End AST ===");
 
         transformed = errors.isEmpty();
-
-        printAST(ast.root, 0);
     }
 
-
     public void printAST(ASTNode node, int indent) {
-        String indentation = " ".repeat(indent);
+        String indentation = " ".repeat(indent);  // inspringing voor hiërarchie
         System.out.println(indentation + node.getNodeLabel());
 
         for (ASTNode child : node.getChildren()) {
             printAST(child, indent + 2); // 2 spaties per niveau
         }
-
     }
 
 
