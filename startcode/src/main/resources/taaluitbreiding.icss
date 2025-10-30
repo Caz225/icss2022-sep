@@ -1,0 +1,7 @@
+Var := 10px;
+
+p {
+    width: Var;
+    Var := 50%;
+    height: Var;
+}

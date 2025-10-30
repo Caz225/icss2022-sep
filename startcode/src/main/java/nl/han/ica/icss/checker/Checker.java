@@ -36,8 +36,30 @@ public class Checker {
         if (node instanceof VariableAssignment) {
             VariableAssignment varAssign = (VariableAssignment) node;
             ExpressionType type = determineType(varAssign.expression);
+
+            // -------------------------
+            // Nieuwe eis (taaluitbreiding): typeconsistentie van variabelen
+            // -------------------------
+            // Als de variabele al eerder gedeclareerd is in de huidige of een buitenliggende scope,
+            // controleer dan of het nieuwe type gelijk is aan het eerdere type.
+            for (HashMap<String, ExpressionType> scope : variableTypes) {
+                if (scope.containsKey(varAssign.name.name)) {
+                    ExpressionType oldType = scope.get(varAssign.name.name);
+                    if (oldType != type) {
+                        // Als het type verschilt, foutmelding geven.
+                        node.setError("Variabele " + varAssign.name.name
+                                + " had eerder type " + oldType
+                                + " maar krijgt nu type " + type + ".");
+                    }
+                    // Stop, we hebben de variabele al gevonden.
+                    return;
+                }
+            }
+
+            // Als de variabele nog niet eerder gedeclareerd was, voeg hem toe in de huidige scope.
             variableTypes.getFirst().put(varAssign.name.name, type);
         }
+
 
         // === 3. Declaraties controleren ===
         else if (node instanceof Declaration) {
